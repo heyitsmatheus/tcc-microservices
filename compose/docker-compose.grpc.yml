@@ -1,0 +1,38 @@
+services:
+  order-gateway:
+    build:
+      context: ../
+      dockerfile: src/OrderGateway/Grpc/Dockerfile
+    container_name: order-gateway-grpc
+    ports:
+      - "5010:8080"
+    environment:
+      - PROCESSOR_URL=http://order-processor:8080
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 256M
+    depends_on:
+      - order-processor
+    networks:
+      - experiment-net
+
+  order-processor:
+    build:
+      context: ../
+      dockerfile: src/OrderProcessor/Grpc/Dockerfile
+    container_name: order-processor-grpc
+    ports:
+      - "5011:8080"
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 256M
+    networks:
+      - experiment-net
+
+networks:
+  experiment-net:
+    driver: bridge

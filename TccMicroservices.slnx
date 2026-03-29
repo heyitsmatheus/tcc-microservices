@@ -1,0 +1,23 @@
+<Solution>
+  <Folder Name="/src/" />
+  <Folder Name="/src/OrderGateway/" />
+  <Folder Name="/src/OrderGateway/Grpc/">
+    <Project Path="src/OrderGateway/Grpc/OrderGateway.Grpc.csproj" />
+  </Folder>
+  <Folder Name="/src/OrderGateway/Http/">
+    <Project Path="src/OrderGateway/Http/OrderGateway.csproj" />
+  </Folder>
+  <Folder Name="/src/OrderGateway/Kafka/">
+    <Project Path="src/OrderGateway/Kafka/OrderGateway.Kafka.csproj" />
+  </Folder>
+  <Folder Name="/src/OrderProcessor/" />
+  <Folder Name="/src/OrderProcessor/Grpc/">
+    <Project Path="src/OrderProcessor/Grpc/OrderProcessor.Grpc.csproj" />
+  </Folder>
+  <Folder Name="/src/OrderProcessor/Http/">
+    <Project Path="src/OrderProcessor/Http/OrderProcessor.csproj" />
+  </Folder>
+  <Folder Name="/src/OrderProcessor/Kafka/">
+    <Project Path="src/OrderProcessor/Kafka/OrderProcessor.Kafka.csproj" />
+  </Folder>
+</Solution>

@@ -1,0 +1,38 @@
+services:
+  order-gateway:
+    build:
+      context: ../src/OrderGateway/Http
+      dockerfile: Dockerfile
+    container_name: order-gateway-rest
+    ports:
+      - "5000:8080"
+    environment:
+      - PROCESSOR_URL=http://order-processor:8080
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 256M
+    depends_on:
+      - order-processor
+    networks:
+      - experiment-net
+
+  order-processor:
+    build:
+      context: ../src/OrderProcessor/Http
+      dockerfile: Dockerfile
+    container_name: order-processor-rest
+    ports:
+      - "5001:8080"
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 256M
+    networks:
+      - experiment-net
+
+networks:
+  experiment-net:
+    driver: bridge

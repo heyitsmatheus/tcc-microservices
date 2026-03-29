@@ -1,0 +1,24 @@
+syntax = "proto3";
+
+option csharp_namespace = "TccMicroservices.Grpc";
+
+package order;
+
+service OrderService {
+  rpc ProcessOrder (OrderRequest) returns (OrderResponse);
+}
+
+message OrderRequest {
+  string order_id    = 1;
+  string product_id  = 2;
+  int32  quantity    = 3;
+  double unit_price  = 4;
+  string customer_id = 5;
+  string created_at  = 6;
+}
+
+message OrderResponse {
+  string order_id      = 1;
+  string status        = 2;
+  string processed_at  = 3;
+}

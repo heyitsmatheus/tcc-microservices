@@ -1,0 +1,20 @@
+## .NET
+bin/
+obj/
+*.user
+*.suo
+.vs/
+*.log
+
+## Docker
+docker-compose.override.yml
+
+## Resultados dos experimentos
+results/
+
+## Sistema operacional
+.DS_Store
+Thumbs.db
+
+## k6
+k6/results/
