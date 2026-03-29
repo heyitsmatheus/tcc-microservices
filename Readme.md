@@ -9,6 +9,7 @@ Experimento controlado comparando **REST**, **gRPC** e **Kafka** como mecanismos
 - [.NET 10 SDK](https://dotnet.microsoft.com/download)
 - [Docker Desktop](https://www.docker.com/products/docker-desktop)
 - [Docker Compose](https://docs.docker.com/compose/)
+- [k6](https://k6.io/docs/get-started/installation/)
 
 ---
 
@@ -31,8 +32,18 @@ tcc-microservices/
 │   ├── docker-compose.rest.yml
 │   ├── docker-compose.grpc.yml
 │   └── docker-compose.kafka.yml
-├── k6/                  # Scripts de carga
+├── k6/
+│   ├── smoke-test.js    # Validação rápida do ambiente
+│   ├── rest/
+│   │   └── load-test.js
+│   ├── grpc/
+│   │   └── load-test.js
+│   └── kafka/
+│       └── load-test.js
 └── results/             # Resultados dos experimentos
+    ├── rest/
+    ├── grpc/
+    └── kafka/
 ```
 
 ---
@@ -45,22 +56,78 @@ tcc-microservices/
 
 ---
 
+## Portas por Cenário
+
+| Cenário | OrderGateway | OrderProcessor |
+|---------|-------------|----------------|
+| REST    | `5000`      | `5001`         |
+| gRPC    | `5010`      | `5011`         |
+| Kafka   | `5020`      | —              |
+
+---
+
+## Limitação de Recursos por Container
+
+| Container       | CPU | Memória |
+|-----------------|-----|---------|
+| order-gateway   | 1.0 | 256 MB  |
+| order-processor | 1.0 | 256 MB  |
+| kafka (broker)  | 1.0 | 512 MB  |
+
+---
+
+## Payload Padrão
+
+O mesmo payload é utilizado nos três cenários, garantindo comparabilidade:
+
+```json
+{
+  "orderId":    "UUID v4",
+  "productId":  "string",
+  "quantity":   "int",
+  "unitPrice":  "decimal",
+  "customerId": "string",
+  "createdAt":  "ISO 8601"
+}
+```
+
+---
+
 ## Cenário 1 — REST
 
-### Subir o ambiente
+### 1. Subir o ambiente
 
 ```bash
 docker compose -f compose/docker-compose.rest.yml up --build
 ```
 
-### Aguardar os serviços
+### 2. Aguardar os serviços
 
 ```
 order-processor-rest  | Now listening on: http://[::]:8080
 order-gateway-rest    | Now listening on: http://[::]:8080
 ```
 
-### Testar
+### 3. Smoke test — validar ambiente
+
+```bash
+k6 run --env BASE_URL=http://localhost:5000 --env EXPECTED_STATUS=200 k6/smoke-test.js
+```
+
+### 4. Executar experimento
+
+```bash
+# Repetição 1
+k6 run k6/rest/load-test.js --out json=results/rest/run-1.json
+
+# Repetição 2
+k6 run k6/rest/load-test.js --out json=results/rest/run-2.json
+
+# Repetição 3
+k6 run k6/rest/load-test.js --out json=results/rest/run-3.json
+```
+
+### 5. Teste manual via curl
 
 ```bash
 curl -X POST http://localhost:5000/api/orders \
@@ -75,8 +142,7 @@ curl -X POST http://localhost:5000/api/orders \
   }'
 ```
 
-### Resposta esperada
-
+**Resposta esperada:**
 ```json
 {
   "orderId": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
@@ -85,7 +151,7 @@ curl -X POST http://localhost:5000/api/orders \
 }
 ```
 
-### Encerrar
+### 6. Encerrar
 
 ```bash
 docker compose -f compose/docker-compose.rest.yml down
@@ -95,20 +161,39 @@ docker compose -f compose/docker-compose.rest.yml down
 
 ## Cenário 2 — gRPC
 
-### Subir o ambiente
+### 1. Subir o ambiente
 
 ```bash
 docker compose -f compose/docker-compose.grpc.yml up --build
 ```
 
-### Aguardar os serviços
+### 2. Aguardar os serviços
 
 ```
 order-processor-grpc  | Now listening on: http://[::]:8080
 order-gateway-grpc    | Now listening on: http://[::]:8080
 ```
 
-### Testar
+### 3. Smoke test — validar ambiente
+
+```bash
+k6 run --env BASE_URL=http://localhost:5010 --env EXPECTED_STATUS=200 k6/smoke-test.js
+```
+
+### 4. Executar experimento
+
+```bash
+# Repetição 1
+k6 run k6/grpc/load-test.js --out json=results/grpc/run-1.json
+
+# Repetição 2
+k6 run k6/grpc/load-test.js --out json=results/grpc/run-2.json
+
+# Repetição 3
+k6 run k6/grpc/load-test.js --out json=results/grpc/run-3.json
+```
+
+### 5. Teste manual via curl
 
 > O Gateway gRPC expõe um endpoint HTTP para receber requisições do k6.
 > A comunicação gRPC acontece internamente entre Gateway e Processor.
@@ -126,8 +211,7 @@ curl -X POST http://localhost:5010/api/orders \
   }'
 ```
 
-### Resposta esperada
-
+**Resposta esperada:**
 ```json
 {
   "orderId": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
@@ -136,7 +220,7 @@ curl -X POST http://localhost:5010/api/orders \
 }
 ```
 
-### Encerrar
+### 6. Encerrar
 
 ```bash
 docker compose -f compose/docker-compose.grpc.yml down
@@ -146,13 +230,13 @@ docker compose -f compose/docker-compose.grpc.yml down
 
 ## Cenário 3 — Kafka
 
-### Subir o ambiente
+### 1. Subir o ambiente
 
 ```bash
 docker compose -f compose/docker-compose.kafka.yml up --build
 ```
 
-### Aguardar os serviços
+### 2. Aguardar os serviços
 
 ```
 kafka                  | Kafka Server started
@@ -160,10 +244,29 @@ order-processor-kafka  | Consumer started. Listening on topic orders
 order-gateway-kafka    | Now listening on: http://[::]:8080
 ```
 
-### Testar
+### 3. Smoke test — validar ambiente
+
+```bash
+k6 run --env BASE_URL=http://localhost:5020 --env EXPECTED_STATUS=202 k6/smoke-test.js
+```
+
+### 4. Executar experimento
+
+```bash
+# Repetição 1
+k6 run k6/kafka/load-test.js --out json=results/kafka/run-1.json
+
+# Repetição 2
+k6 run k6/kafka/load-test.js --out json=results/kafka/run-2.json
+
+# Repetição 3
+k6 run k6/kafka/load-test.js --out json=results/kafka/run-3.json
+```
+
+### 5. Teste manual via curl
 
 > O Gateway publica a mensagem no tópico Kafka e responde imediatamente com HTTP 202 Accepted.
-> O Processor consome a mensagem de forma assíncrona — sem resposta direta ao Gateway.
+> O Processor consome a mensagem de forma assíncrona.
 
 ```bash
 curl -X POST http://localhost:5020/api/orders \
@@ -178,8 +281,7 @@ curl -X POST http://localhost:5020/api/orders \
   }'
 ```
 
-### Resposta esperada
-
+**Resposta esperada:**
 ```json
 {
   "orderId": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
@@ -193,7 +295,7 @@ curl -X POST http://localhost:5020/api/orders \
 > info: Processing order 3fa85f64-5717-4562-b3fc-2c963f66afa6
 > ```
 
-### Encerrar
+### 6. Encerrar
 
 ```bash
 docker compose -f compose/docker-compose.kafka.yml down
@@ -201,46 +303,18 @@ docker compose -f compose/docker-compose.kafka.yml down
 
 ---
 
-## Portas por Cenário
+## Fluxo de Execução do Experimento
 
-| Cenário | OrderGateway | OrderProcessor |
-|---------|-------------|----------------|
-| REST    | `5000`      | `5001`         |
-| gRPC    | `5010`      | `5011`         |
-| Kafka   | `5020`      | —              |
-
----
-
-## Limitação de Recursos por Container
-
-| Container         | CPU  | Memória |
-|-------------------|------|---------|
-| order-gateway     | 1.0  | 256 MB  |
-| order-processor   | 1.0  | 256 MB  |
-| kafka (broker)    | 1.0  | 512 MB  |
-
----
-
-## Payload Padrão
-
-O mesmo payload é utilizado nos três cenários, garantindo comparabilidade:
-
-```json
-{
-  "orderId": "UUID v4",
-  "productId": "string",
-  "quantity": "int",
-  "unitPrice": "decimal",
-  "customerId": "string",
-  "createdAt": "ISO 8601"
-}
 ```
+Para cada cenário (REST, gRPC, Kafka):
 
----
-
-## Execução dos Experimentos com k6
-
-> Documentação dos scripts k6 será adicionada nesta seção.
+  1. docker compose up --build
+  2. k6 smoke-test          ← valida ambiente
+  3. k6 run → run-1.json    ← repetição 1
+  4. k6 run → run-2.json    ← repetição 2
+  5. k6 run → run-3.json    ← repetição 3
+  6. docker compose down
+```
 
 ---
 
@@ -251,6 +325,15 @@ Os resultados de cada execução são salvos em:
 ```
 results/
 ├── rest/
+│   ├── run-1.json
+│   ├── run-2.json
+│   └── run-3.json
 ├── grpc/
+│   ├── run-1.json
+│   ├── run-2.json
+│   └── run-3.json
 └── kafka/
+    ├── run-1.json
+    ├── run-2.json
+    └── run-3.json
 ```
