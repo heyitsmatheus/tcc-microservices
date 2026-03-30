@@ -86,11 +86,12 @@ tcc-microservices/
 
 ## Portas da Stack de Observabilidade
 
-| Serviço    | URL                   | Credenciais   |
-|------------|-----------------------|---------------|
-| Prometheus | http://localhost:9090  | —             |
-| Grafana    | http://localhost:3000  | admin / admin |
-| cAdvisor   | http://localhost:8090  | —             |
+| Serviço        | URL                   | Credenciais   |
+|----------------|-----------------------|---------------|
+| Prometheus     | http://localhost:9090  | —             |
+| Grafana        | http://localhost:3000  | admin / admin |
+| cAdvisor       | http://localhost:8090  | —             |
+| Kafka Exporter | http://localhost:9308  | —             |
 
 ---
 
@@ -118,6 +119,10 @@ tcc-microservices/
 ### Domínio (métricas customizadas)
 - `orders_processed_total` — total de pedidos processados
 - `order_processing_time_ms` — tempo de processamento interno
+
+### Kafka (via kafka-exporter)
+- `kafka_consumergroup_lag` — consumer lag por grupo e tópico
+- `kafka_topic_partition_current_offset` — offset atual do tópico
 
 ---
 
@@ -318,6 +323,7 @@ docker compose -f compose/docker-compose.kafka.yml up --build
 
 ```
 kafka                  | Kafka Server started
+kafka-exporter         | Starting metrics collection
 order-processor-kafka  | Consumer started. Listening on topic orders
 order-gateway-kafka    | Now listening on: http://[::]:8080
 prometheus-kafka       | Server is ready to receive web requests
@@ -357,6 +363,7 @@ k6 run k6/kafka/failure-test.js --out json=results/kafka/failure-run-1.json
 
 > No Kafka, o Gateway continua respondendo 202 mesmo com o Processor down.
 > As mensagens acumulam no tópico e são consumidas após o restart.
+> Monitore o painel **Consumer Lag** no Grafana durante a falha.
 
 ### 6. Teste manual via curl
 
@@ -402,14 +409,15 @@ Para cada cenário (REST, gRPC, Kafka):
   4. k6 run → run-1.json  (repetição 1)
   5. k6 run → run-2.json  (repetição 2)
   6. k6 run → run-3.json  (repetição 3)
-  7. Exportar snapshot do Grafana
-  8. Anotar métricas do Prometheus
+  7. Anotar métricas do Prometheus na planilha
+  8. Exportar snapshot do Grafana
 
   Cenário de Falha:
   9.  Terminal 1 → k6 failure-test → failure-run-1.json
       Terminal 2 → failure-scenario.ps1
-  10. Exportar snapshot do Grafana
-  11. docker compose down
+  10. Anotar métricas do Prometheus na planilha
+  11. Exportar snapshot do Grafana
+  12. docker compose down
 ```
 
 ---
@@ -425,8 +433,73 @@ t=5:00  → k6 encerra
 Comportamento esperado por protocolo:
   REST  → erros imediatos, recuperação após restart
   gRPC  → erros imediatos, recuperação após restart
-  Kafka → zero erros, mensagens acumulam e são consumidas após restart
+  Kafka → zero erros, consumer lag sobe e zera após restart
 ```
+
+---
+
+## Coleta de Resultados — Queries do Prometheus
+
+Execute as queries abaixo em http://localhost:9090/graph **antes do `docker compose down`** e anote os valores na planilha.
+
+### Queries — REST e gRPC
+
+```promql
+# Latência P95 (ms)
+histogram_quantile(0.95, sum(rate(http_server_request_duration_seconds_bucket[5m])) by (le)) * 1000
+
+# Latência P99 (ms)
+histogram_quantile(0.99, sum(rate(http_server_request_duration_seconds_bucket[5m])) by (le)) * 1000
+
+# Latência Média (ms)
+sum(rate(http_server_request_duration_seconds_sum[5m])) / sum(rate(http_server_request_duration_seconds_count[5m])) * 1000
+
+# Throughput (req/s)
+sum(rate(http_server_request_duration_seconds_count[5m]))
+
+# Taxa de erro (%)
+sum(rate(http_server_request_duration_seconds_count{http_response_status_code=~"5.."}[5m])) / sum(rate(http_server_request_duration_seconds_count[5m])) * 100
+
+# Tempo de processamento interno P95 (ms)
+histogram_quantile(0.95, sum(rate(order_processing_time_ms_bucket[5m])) by (le))
+
+# Tempo de processamento interno P99 (ms)
+histogram_quantile(0.99, sum(rate(order_processing_time_ms_bucket[5m])) by (le))
+
+# CPU Gateway (%)
+sum(rate(container_cpu_usage_seconds_total{name=~"order-gateway.*"}[5m])) by (name) * 100
+
+# CPU Processor (%)
+sum(rate(container_cpu_usage_seconds_total{name=~"order-processor.*"}[5m])) by (name) * 100
+
+# Memória Gateway (MB)
+container_memory_usage_bytes{name=~"order-gateway.*"} / 1024 / 1024
+
+# Memória Processor (MB)
+container_memory_usage_bytes{name=~"order-processor.*"} / 1024 / 1024
+```
+
+---
+
+### Queries adicionais — Kafka (consumer lag)
+
+```promql
+# Consumer lag atual
+sum(kafka_consumergroup_lag) by (consumergroup, topic)
+
+# Consumer lag médio durante a execução
+avg_over_time(sum(kafka_consumergroup_lag)[5m:])
+
+# Consumer lag máximo (pico — especialmente útil no cenário de falha)
+max_over_time(sum(kafka_consumergroup_lag)[5m:])
+
+# Offset atual do tópico (total de mensagens publicadas)
+sum(kafka_topic_partition_current_offset) by (topic)
+```
+
+> **No cenário de falha:** anote o valor máximo do consumer lag atingido durante
+> a indisponibilidade do Processor e o tempo aproximado para o lag zerar após o restart.
+> Esses dois valores evidenciam o comportamento de desacoplamento temporal do Kafka.
 
 ---
 
@@ -446,35 +519,8 @@ O dashboard **TCC — Experimento Microserviços** é provisionado automaticamen
 | CPU Processor | `container_cpu_usage_seconds_total` |
 | Memória | `container_memory_usage_bytes` |
 | Tempo de Processamento Interno P95/P99 | `order_processing_time_ms` |
-
----
-
-## Coleta de Resultados
-
-### Após cada execução, antes do `docker compose down`:
-
-**1. Exportar snapshot do Grafana**
-```
-Grafana → Share → Snapshot → Publish
-```
-
-**2. Queries do Prometheus para anotar na planilha**
-```
-# Latência P95 (ms)
-histogram_quantile(0.95, sum(rate(http_server_request_duration_seconds_bucket[5m])) by (le)) * 1000
-
-# Latência P99 (ms)
-histogram_quantile(0.99, sum(rate(http_server_request_duration_seconds_bucket[5m])) by (le)) * 1000
-
-# Throughput (req/s)
-sum(rate(http_server_request_duration_seconds_count[5m]))
-
-# CPU Gateway
-sum(rate(container_cpu_usage_seconds_total{name=~"order-gateway.*"}[5m])) by (name)
-
-# CPU Processor
-sum(rate(container_cpu_usage_seconds_total{name=~"order-processor.*"}[5m])) by (name)
-```
+| Consumer Lag | `kafka_consumergroup_lag` |
+| Offset do Tópico | `kafka_topic_partition_current_offset` |
 
 ---
 
