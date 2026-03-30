@@ -32,6 +32,19 @@ tcc-microservices/
 │   ├── docker-compose.rest.yml
 │   ├── docker-compose.grpc.yml
 │   └── docker-compose.kafka.yml
+├── observability/
+│   ├── prometheus/
+│   │   ├── prometheus.rest.yml
+│   │   ├── prometheus.grpc.yml
+│   │   └── prometheus.kafka.yml
+│   └── grafana/
+│       └── provisioning/
+│           ├── datasources/
+│           │   └── prometheus.yml
+│           ├── dashboards/
+│           │   └── dashboard.yml
+│           └── dashboards-json/
+│               └── experiment.json
 ├── k6/
 │   ├── smoke-test.js    # Validação rápida do ambiente
 │   ├── rest/
@@ -66,6 +79,16 @@ tcc-microservices/
 
 ---
 
+## Portas da Stack de Observabilidade
+
+| Serviço    | URL                         | Credenciais  |
+|------------|-----------------------------|--------------|
+| Prometheus | http://localhost:9090        | —            |
+| Grafana    | http://localhost:3000        | admin / admin|
+| cAdvisor   | http://localhost:8090        | —            |
+
+---
+
 ## Limitação de Recursos por Container
 
 | Container       | CPU | Memória |
@@ -73,6 +96,23 @@ tcc-microservices/
 | order-gateway   | 1.0 | 256 MB  |
 | order-processor | 1.0 | 256 MB  |
 | kafka (broker)  | 1.0 | 512 MB  |
+
+---
+
+## Métricas Coletadas
+
+### Infraestrutura (via cAdvisor)
+- CPU por container
+- Memória por container
+
+### Aplicação (via OpenTelemetry + Prometheus)
+- Latência HTTP/gRPC (P95, P99, média)
+- Throughput (req/s)
+- Taxa de erro
+
+### Domínio (métricas customizadas)
+- `orders_processed_total` — total de pedidos processados
+- `order_processing_time_ms` — tempo de processamento interno
 
 ---
 
@@ -106,6 +146,8 @@ docker compose -f compose/docker-compose.rest.yml up --build
 ```
 order-processor-rest  | Now listening on: http://[::]:8080
 order-gateway-rest    | Now listening on: http://[::]:8080
+prometheus-rest       | Server is ready to receive web requests
+grafana-rest          | HTTP server listening on :3000
 ```
 
 ### 3. Smoke test — validar ambiente
@@ -172,6 +214,8 @@ docker compose -f compose/docker-compose.grpc.yml up --build
 ```
 order-processor-grpc  | Now listening on: http://[::]:8080
 order-gateway-grpc    | Now listening on: http://[::]:8080
+prometheus-grpc       | Server is ready to receive web requests
+grafana-grpc          | HTTP server listening on :3000
 ```
 
 ### 3. Smoke test — validar ambiente
@@ -242,6 +286,8 @@ docker compose -f compose/docker-compose.kafka.yml up --build
 kafka                  | Kafka Server started
 order-processor-kafka  | Consumer started. Listening on topic orders
 order-gateway-kafka    | Now listening on: http://[::]:8080
+prometheus-kafka       | Server is ready to receive web requests
+grafana-kafka          | HTTP server listening on :3000
 ```
 
 ### 3. Smoke test — validar ambiente
@@ -309,12 +355,33 @@ docker compose -f compose/docker-compose.kafka.yml down
 Para cada cenário (REST, gRPC, Kafka):
 
   1. docker compose up --build
-  2. k6 smoke-test          ← valida ambiente
-  3. k6 run → run-1.json    ← repetição 1
-  4. k6 run → run-2.json    ← repetição 2
-  5. k6 run → run-3.json    ← repetição 3
-  6. docker compose down
+  2. Verificar targets no Prometheus → http://localhost:9090/targets
+  3. k6 smoke-test          ← valida ambiente
+  4. k6 run → run-1.json    ← repetição 1
+  5. k6 run → run-2.json    ← repetição 2
+  6. k6 run → run-3.json    ← repetição 3
+  7. Exportar snapshots do Grafana
+  8. docker compose down
 ```
+
+---
+
+## Dashboard Grafana
+
+O dashboard **TCC — Experimento Microserviços** é provisionado automaticamente e contém:
+
+| Painel | Métrica |
+|--------|---------|
+| Latência P95 | `histogram_quantile(0.95, ...)` |
+| Latência P99 | `histogram_quantile(0.99, ...)` |
+| Latência Média | `rate(duration_sum) / rate(duration_count)` |
+| Throughput | `rate(http_server_request_duration_seconds_count)` |
+| Taxa de Erro | Requisições com status 5xx |
+| Pedidos Processados | `orders_processed_total` |
+| CPU Gateway | `container_cpu_usage_seconds_total` |
+| CPU Processor | `container_cpu_usage_seconds_total` |
+| Memória | `container_memory_usage_bytes` |
+| Tempo de Processamento Interno P95/P99 | `order_processing_time_ms` |
 
 ---
 
