@@ -1,23 +1,22 @@
-﻿using Confluent.Kafka;
+﻿using System.Diagnostics;
+using System.Diagnostics.Metrics;
+using Confluent.Kafka;
 using OrderProcessor.Kafka.Models;
 using System.Text.Json;
 
 namespace OrderProcessor.Kafka.Services;
 
-public class OrderConsumerService : BackgroundService
+public class OrderConsumerService(
+    ILogger<OrderConsumerService> logger,
+    IConfiguration configuration,
+    Counter<long> ordersProcessed,
+    Histogram<double> processingTime) : BackgroundService
 {
-    private readonly ILogger<OrderConsumerService> _logger;
-    private readonly string _bootstrapServers;
-    private readonly string _topic;
-    private readonly string _groupId;
-
-    public OrderConsumerService(ILogger<OrderConsumerService> logger, IConfiguration configuration)
-    {
-        _logger = logger;
-        _bootstrapServers = configuration["KAFKA_BOOTSTRAP_SERVERS"] ?? "localhost:9092";
-        _topic = configuration["KAFKA_TOPIC"] ?? "orders";
-        _groupId = configuration["KAFKA_GROUP_ID"] ?? "order-processor-group";
-    }
+    private readonly string _bootstrapServers = configuration["KAFKA_BOOTSTRAP_SERVERS"] ?? "localhost:9092";
+    private readonly string _topic = configuration["KAFKA_TOPIC"] ?? "orders";
+    private readonly string _groupId = configuration["KAFKA_GROUP_ID"] ?? "order-processor-group";
+    private readonly Counter<long> _ordersProcessed = ordersProcessed;
+    private readonly Histogram<double> _processingTime = processingTime;
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -33,7 +32,7 @@ public class OrderConsumerService : BackgroundService
 
         consumer.Subscribe(_topic);
 
-        _logger.LogInformation("Consumer started. Listening on topic {Topic}", _topic);
+        logger.LogInformation("Consumer started. Listening on topic {Topic}", _topic);
 
         while (!stoppingToken.IsCancellationRequested)
         {
@@ -41,12 +40,20 @@ public class OrderConsumerService : BackgroundService
             {
                 var result = consumer.Consume(stoppingToken);
 
-                var order = JsonSerializer.Deserialize<OrderRequest>(result.Message.Value,
+                var stopwatch = Stopwatch.StartNew();
+
+                var order = JsonSerializer.Deserialize<OrderRequest>(
+                    result.Message.Value,
                     new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
 
                 if (order is null) continue;
 
-                _logger.LogInformation("Processing order {OrderId}", order.OrderId);
+                logger.LogInformation("Processing order {OrderId}", order.OrderId);
+
+                stopwatch.Stop();
+
+                _ordersProcessed.Add(1);
+                _processingTime.Record(stopwatch.Elapsed.TotalMilliseconds);
             }
             catch (OperationCanceledException)
             {
@@ -54,12 +61,12 @@ public class OrderConsumerService : BackgroundService
             }
             catch (ConsumeException ex) when (ex.Error.Code == ErrorCode.UnknownTopicOrPart)
             {
-                _logger.LogWarning("Topic '{Topic}' not available yet. Retrying in 2s...", _topic);
+                logger.LogWarning("Topic '{Topic}' not available yet. Retrying in 2s...", _topic);
                 await Task.Delay(2000, stoppingToken);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error consuming message");
+                logger.LogError(ex, "Error consuming message");
             }
         }
 

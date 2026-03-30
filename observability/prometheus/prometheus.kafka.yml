@@ -1,0 +1,15 @@
+global:
+  scrape_interval: 5s
+
+scrape_configs:
+  - job_name: 'order-gateway-kafka'
+    static_configs:
+      - targets: ['order-gateway:8080']
+
+  - job_name: 'order-processor-kafka'
+    static_configs:
+      - targets: ['order-processor:8080']
+
+  - job_name: 'cadvisor'
+    static_configs:
+      - targets: ['cadvisor:8080']

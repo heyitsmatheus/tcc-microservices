@@ -1,11 +1,23 @@
 using Grpc.Net.Client;
+using OpenTelemetry.Metrics;
 using TccMicroservices.Grpc;
 using OrderRequestDomain = OrderGateway.Grpc.Models.OrderRequest;
 using OrderRequestGrpc = TccMicroservices.Grpc.OrderRequest;
 
 var builder = WebApplication.CreateBuilder(args);
 
+builder.Services.AddOpenTelemetry()
+    .WithMetrics(metrics =>
+    {
+        metrics
+            .AddAspNetCoreInstrumentation()
+            .AddHttpClientInstrumentation()
+            .AddPrometheusExporter();
+    });
+
 var app = builder.Build();
+
+app.MapPrometheusScrapingEndpoint();
 
 app.MapPost("/api/orders", async (OrderRequestDomain request, IConfiguration configuration) =>
 {
@@ -22,16 +34,16 @@ app.MapPost("/api/orders", async (OrderRequestDomain request, IConfiguration con
         Quantity = request.Quantity,
         UnitPrice = (double)request.UnitPrice,
         CustomerId = request.CustomerId,
-        CreatedAt = request.CreatedAt.ToString("O")
+        CreatedAt = request.CreatedAt.ToString("o")
     };
 
     var response = await client.ProcessOrderAsync(grpcRequest);
 
-    return Results.Ok(new
+    return Results.Ok(new OrderResponse
     {
-        orderId = response.OrderId,
-        status = response.Status,
-        processedAt = response.ProcessedAt
+        OrderId = response.OrderId,
+        Status = response.Status,
+        ProcessedAt = response.ProcessedAt
     });
 });
 

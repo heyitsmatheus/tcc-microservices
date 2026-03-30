@@ -1,14 +1,28 @@
 using System.Text;
 using System.Text.Json;
+using OpenTelemetry.Metrics;
 using OrderGateway.Models;
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddHttpClient("processor");
 
+builder.Services.AddOpenTelemetry()
+    .WithMetrics(metrics =>
+    {
+        metrics
+            .AddAspNetCoreInstrumentation()
+            .AddHttpClientInstrumentation() // latência das chamadas HTTP saintes
+            .AddPrometheusExporter();
+    });
+
 var app = builder.Build();
 
-app.MapPost("/api/orders", async (OrderRequest request, IHttpClientFactory httpClientFactory, IConfiguration configuration) =>
+app.MapPrometheusScrapingEndpoint();
+
+app.MapPost("/api/orders", async (OrderRequest request,
+    IHttpClientFactory httpClientFactory,
+    IConfiguration configuration) =>
 {
     var processorUrl = configuration["PROCESSOR_URL"]
         ?? throw new InvalidOperationException("PROCESSOR_URL not configured");

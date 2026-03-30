@@ -1,12 +1,47 @@
+using Microsoft.AspNetCore.Server.Kestrel.Core;
+using OpenTelemetry.Metrics;
 using OrderProcessor.Grpc.Services;
+using System.Diagnostics.Metrics;
+
+var meter = new Meter("OrderProcessor.Grpc");
+var ordersProcessed = meter.CreateCounter<long>(
+    "orders_processed",
+    description: "Total de pedidos processados");
+var processingTime = meter.CreateHistogram<double>(
+    "order_processing_time_ms",
+    unit: "ms",
+    description: "Tempo de processamento interno do pedido");
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Habilita HTTP/1.1 e HTTP/2 na mesma porta
+// HTTP/2 → necessário para gRPC
+// HTTP/1.1 → necessário para o Prometheus fazer scraping do /metrics
+builder.WebHost.ConfigureKestrel(options =>
+{
+    options.ListenAnyIP(8080, listenOptions =>
+    {
+        listenOptions.Protocols = HttpProtocols.Http1AndHttp2;
+    });
+});
+
 builder.Services.AddGrpc();
+
+builder.Services.AddOpenTelemetry()
+    .WithMetrics(metrics =>
+    {
+        metrics
+            .AddAspNetCoreInstrumentation()
+            .AddMeter("OrderProcessor.Grpc")
+            .AddPrometheusExporter();
+    });
+
+builder.Services.AddSingleton(ordersProcessed);
+builder.Services.AddSingleton(processingTime);
 
 var app = builder.Build();
 
+app.MapPrometheusScrapingEndpoint();
 app.MapGrpcService<OrderService>();
-app.MapGet("/", () => "Communication with gRPC endpoints must be made through a gRPC client. To learn how to create a client, visit: https://go.microsoft.com/fwlink/?linkid=2086909");
 
 app.Run();
