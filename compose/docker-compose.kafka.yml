@@ -24,6 +24,19 @@ services:
     networks:
       - experiment-net
 
+  kafka-exporter:
+    image: danielqsj/kafka-exporter:latest
+    container_name: kafka-exporter
+    command:
+      - "--kafka.server=kafka:9092"
+    ports:
+      - "9308:9308"
+    depends_on:
+      - kafka
+    restart: on-failure
+    networks:
+      - experiment-net
+
   order-gateway:
     build:
       context: ../src/OrderGateway/Kafka
@@ -75,7 +88,7 @@ services:
 
   grafana:
     image: grafana/grafana:10.4.0
-    container_name: grafana-rest
+    container_name: grafana-kafka
     ports:
       - "3000:3000"
     environment:
