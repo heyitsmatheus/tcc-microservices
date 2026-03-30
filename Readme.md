@@ -46,14 +46,19 @@ tcc-microservices/
 │           └── dashboards-json/
 │               └── experiment.json
 ├── k6/
-│   ├── smoke-test.js    # Validação rápida do ambiente
+│   ├── smoke-test.js        # Validação rápida do ambiente
 │   ├── rest/
-│   │   └── load-test.js
+│   │   ├── load-test.js     # Carga normal
+│   │   └── failure-test.js  # Cenário de falha
 │   ├── grpc/
-│   │   └── load-test.js
+│   │   ├── load-test.js
+│   │   └── failure-test.js
 │   └── kafka/
-│       └── load-test.js
-└── results/             # Resultados dos experimentos
+│       ├── load-test.js
+│       └── failure-test.js
+├── scripts/
+│   └── failure-scenario.ps1 # Script de interrupção controlada
+└── results/
     ├── rest/
     ├── grpc/
     └── kafka/
@@ -81,11 +86,11 @@ tcc-microservices/
 
 ## Portas da Stack de Observabilidade
 
-| Serviço    | URL                         | Credenciais  |
-|------------|-----------------------------|--------------|
-| Prometheus | http://localhost:9090        | —            |
-| Grafana    | http://localhost:3000        | admin / admin|
-| cAdvisor   | http://localhost:8090        | —            |
+| Serviço    | URL                   | Credenciais   |
+|------------|-----------------------|---------------|
+| Prometheus | http://localhost:9090  | —             |
+| Grafana    | http://localhost:3000  | admin / admin |
+| cAdvisor   | http://localhost:8090  | —             |
 
 ---
 
@@ -156,7 +161,7 @@ grafana-rest          | HTTP server listening on :3000
 k6 run --env BASE_URL=http://localhost:5000 --env EXPECTED_STATUS=200 k6/smoke-test.js
 ```
 
-### 4. Executar experimento
+### 4. Executar experimento — carga normal
 
 ```bash
 # Repetição 1
@@ -169,7 +174,24 @@ k6 run k6/rest/load-test.js --out json=results/rest/run-2.json
 k6 run k6/rest/load-test.js --out json=results/rest/run-3.json
 ```
 
-### 5. Teste manual via curl
+### 5. Executar experimento — cenário de falha
+
+Abrir **dois terminais** em paralelo:
+
+**Terminal 1 — k6:**
+```bash
+k6 run k6/rest/failure-test.js --out json=results/rest/failure-run-1.json
+```
+
+**Terminal 2 — script de falha (executar imediatamente após o k6 iniciar):**
+```powershell
+.\scripts\failure-scenario.ps1 -Scenario rest
+```
+
+> O script aguarda 2 minutos, derruba o Processor por 60 segundos e reinicia.
+> Monitore o Grafana em tempo real durante a execução.
+
+### 6. Teste manual via curl
 
 ```bash
 curl -X POST http://localhost:5000/api/orders \
@@ -193,7 +215,7 @@ curl -X POST http://localhost:5000/api/orders \
 }
 ```
 
-### 6. Encerrar
+### 7. Encerrar
 
 ```bash
 docker compose -f compose/docker-compose.rest.yml down
@@ -224,7 +246,7 @@ grafana-grpc          | HTTP server listening on :3000
 k6 run --env BASE_URL=http://localhost:5010 --env EXPECTED_STATUS=200 k6/smoke-test.js
 ```
 
-### 4. Executar experimento
+### 4. Executar experimento — carga normal
 
 ```bash
 # Repetição 1
@@ -237,7 +259,19 @@ k6 run k6/grpc/load-test.js --out json=results/grpc/run-2.json
 k6 run k6/grpc/load-test.js --out json=results/grpc/run-3.json
 ```
 
-### 5. Teste manual via curl
+### 5. Executar experimento — cenário de falha
+
+**Terminal 1 — k6:**
+```bash
+k6 run k6/grpc/failure-test.js --out json=results/grpc/failure-run-1.json
+```
+
+**Terminal 2 — script de falha:**
+```powershell
+.\scripts\failure-scenario.ps1 -Scenario grpc
+```
+
+### 6. Teste manual via curl
 
 > O Gateway gRPC expõe um endpoint HTTP para receber requisições do k6.
 > A comunicação gRPC acontece internamente entre Gateway e Processor.
@@ -264,7 +298,7 @@ curl -X POST http://localhost:5010/api/orders \
 }
 ```
 
-### 6. Encerrar
+### 7. Encerrar
 
 ```bash
 docker compose -f compose/docker-compose.grpc.yml down
@@ -296,7 +330,7 @@ grafana-kafka          | HTTP server listening on :3000
 k6 run --env BASE_URL=http://localhost:5020 --env EXPECTED_STATUS=202 k6/smoke-test.js
 ```
 
-### 4. Executar experimento
+### 4. Executar experimento — carga normal
 
 ```bash
 # Repetição 1
@@ -309,10 +343,22 @@ k6 run k6/kafka/load-test.js --out json=results/kafka/run-2.json
 k6 run k6/kafka/load-test.js --out json=results/kafka/run-3.json
 ```
 
-### 5. Teste manual via curl
+### 5. Executar experimento — cenário de falha
 
-> O Gateway publica a mensagem no tópico Kafka e responde imediatamente com HTTP 202 Accepted.
-> O Processor consome a mensagem de forma assíncrona.
+**Terminal 1 — k6:**
+```bash
+k6 run k6/kafka/failure-test.js --out json=results/kafka/failure-run-1.json
+```
+
+**Terminal 2 — script de falha:**
+```powershell
+.\scripts\failure-scenario.ps1 -Scenario kafka
+```
+
+> No Kafka, o Gateway continua respondendo 202 mesmo com o Processor down.
+> As mensagens acumulam no tópico e são consumidas após o restart.
+
+### 6. Teste manual via curl
 
 ```bash
 curl -X POST http://localhost:5020/api/orders \
@@ -336,12 +382,7 @@ curl -X POST http://localhost:5020/api/orders \
 }
 ```
 
-> O log do `order-processor-kafka` deve exibir:
-> ```
-> info: Processing order 3fa85f64-5717-4562-b3fc-2c963f66afa6
-> ```
-
-### 6. Encerrar
+### 7. Encerrar
 
 ```bash
 docker compose -f compose/docker-compose.kafka.yml down
@@ -354,14 +395,37 @@ docker compose -f compose/docker-compose.kafka.yml down
 ```
 Para cada cenário (REST, gRPC, Kafka):
 
+  Carga Normal:
   1. docker compose up --build
-  2. Verificar targets no Prometheus → http://localhost:9090/targets
-  3. k6 smoke-test          ← valida ambiente
-  4. k6 run → run-1.json    ← repetição 1
-  5. k6 run → run-2.json    ← repetição 2
-  6. k6 run → run-3.json    ← repetição 3
-  7. Exportar snapshots do Grafana
-  8. docker compose down
+  2. Verificar targets → http://localhost:9090/targets
+  3. k6 smoke-test
+  4. k6 run → run-1.json  (repetição 1)
+  5. k6 run → run-2.json  (repetição 2)
+  6. k6 run → run-3.json  (repetição 3)
+  7. Exportar snapshot do Grafana
+  8. Anotar métricas do Prometheus
+
+  Cenário de Falha:
+  9.  Terminal 1 → k6 failure-test → failure-run-1.json
+      Terminal 2 → failure-scenario.ps1
+  10. Exportar snapshot do Grafana
+  11. docker compose down
+```
+
+---
+
+## Cenário de Falha — Linha do Tempo
+
+```
+t=0:00  → k6 inicia carga (200 VUs)
+t=2:00  → OrderProcessor é DERRUBADO
+t=3:00  → OrderProcessor é REINICIADO
+t=5:00  → k6 encerra
+
+Comportamento esperado por protocolo:
+  REST  → erros imediatos, recuperação após restart
+  gRPC  → erros imediatos, recuperação após restart
+  Kafka → zero erros, mensagens acumulam e são consumidas após restart
 ```
 
 ---
@@ -385,22 +449,52 @@ O dashboard **TCC — Experimento Microserviços** é provisionado automaticamen
 
 ---
 
-## Resultados
+## Coleta de Resultados
 
-Os resultados de cada execução são salvos em:
+### Após cada execução, antes do `docker compose down`:
+
+**1. Exportar snapshot do Grafana**
+```
+Grafana → Share → Snapshot → Publish
+```
+
+**2. Queries do Prometheus para anotar na planilha**
+```
+# Latência P95 (ms)
+histogram_quantile(0.95, sum(rate(http_server_request_duration_seconds_bucket[5m])) by (le)) * 1000
+
+# Latência P99 (ms)
+histogram_quantile(0.99, sum(rate(http_server_request_duration_seconds_bucket[5m])) by (le)) * 1000
+
+# Throughput (req/s)
+sum(rate(http_server_request_duration_seconds_count[5m]))
+
+# CPU Gateway
+sum(rate(container_cpu_usage_seconds_total{name=~"order-gateway.*"}[5m])) by (name)
+
+# CPU Processor
+sum(rate(container_cpu_usage_seconds_total{name=~"order-processor.*"}[5m])) by (name)
+```
+
+---
+
+## Resultados
 
 ```
 results/
 ├── rest/
 │   ├── run-1.json
 │   ├── run-2.json
-│   └── run-3.json
+│   ├── run-3.json
+│   └── failure-run-1.json
 ├── grpc/
 │   ├── run-1.json
 │   ├── run-2.json
-│   └── run-3.json
+│   ├── run-3.json
+│   └── failure-run-1.json
 └── kafka/
     ├── run-1.json
     ├── run-2.json
-    └── run-3.json
+    ├── run-3.json
+    └── failure-run-1.json
 ```
