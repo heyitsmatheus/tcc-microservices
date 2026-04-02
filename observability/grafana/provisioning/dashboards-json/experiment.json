@@ -40,7 +40,7 @@
       "options": { "tooltip": { "mode": "multi" } },
       "targets": [
         {
-          "expr": "histogram_quantile(0.95, sum(rate(http_server_request_duration_seconds_bucket[1m])) by (le)) * 1000",
+          "expr": "histogram_quantile(0.95, sum(rate(http_server_request_duration_seconds_bucket{http_route=\"/api/orders\"}[1m])) by (le)) * 1000",
           "legendFormat": "P95"
         }
       ],
@@ -67,7 +67,7 @@
       "id": 3,
       "targets": [
         {
-          "expr": "histogram_quantile(0.99, sum(rate(http_server_request_duration_seconds_bucket[1m])) by (le)) * 1000",
+          "expr": "histogram_quantile(0.99, sum(rate(http_server_request_duration_seconds_bucket{http_route=\"/api/orders\"}[1m])) by (le)) * 1000",
           "legendFormat": "P99"
         }
       ],
@@ -94,7 +94,7 @@
       "id": 4,
       "targets": [
         {
-          "expr": "sum(rate(http_server_request_duration_seconds_sum[1m])) / sum(rate(http_server_request_duration_seconds_count[1m])) * 1000",
+          "expr": "sum(rate(http_server_request_duration_seconds_sum{http_route=\"/api/orders\"}[1m])) / sum(rate(http_server_request_duration_seconds_count{http_route=\"/api/orders\"}[1m])) * 1000",
           "legendFormat": "Média"
         }
       ],
@@ -132,7 +132,7 @@
       "id": 6,
       "targets": [
         {
-          "expr": "sum(rate(http_server_request_duration_seconds_count[1m]))",
+          "expr": "sum(rate(http_server_request_duration_seconds_count{http_route=\"/api/orders\"}[1m]))",
           "legendFormat": "req/s"
         }
       ],
@@ -147,7 +147,7 @@
       "fieldConfig": {
         "defaults": {
           "color": { "mode": "palette-classic" },
-          "unit": "percentunit"
+          "unit": "percent"
         }
       },
       "gridPos": {
@@ -159,11 +159,11 @@
       "id": 7,
       "targets": [
         {
-          "expr": "sum(rate(http_server_request_duration_seconds_count{http_response_status_code=~\"5..\"}[1m])) / sum(rate(http_server_request_duration_seconds_count[1m]))",
-          "legendFormat": "Taxa de Erro"
+          "expr": "sum(rate(http_server_request_duration_seconds_count{http_route=\"/api/orders\", http_response_status_code!~\"2..\"}[1m])) / sum(rate(http_server_request_duration_seconds_count{http_route=\"/api/orders\"}[1m])) * 100",
+          "legendFormat": "Taxa de Erro (%)"
         }
       ],
-      "title": "Taxa de Erro",
+      "title": "Taxa de Erro (%)",
       "type": "timeseries"
     },
     {
@@ -316,11 +316,11 @@
       "id": 14,
       "targets": [
         {
-          "expr": "histogram_quantile(0.95, sum(rate(order_processing_time_ms_bucket[1m])) by (le))",
+          "expr": "histogram_quantile(0.95, sum(rate(order_processing_time_ms_milliseconds_bucket[1m])) by (le))",
           "legendFormat": "P95 processamento"
         },
         {
-          "expr": "histogram_quantile(0.99, sum(rate(order_processing_time_ms_bucket[1m])) by (le))",
+          "expr": "histogram_quantile(0.99, sum(rate(order_processing_time_ms_milliseconds_bucket[1m])) by (le))",
           "legendFormat": "P99 processamento"
         }
       ],
@@ -347,7 +347,7 @@
       "id": 15,
       "targets": [
         {
-          "expr": "sum(rate(order_processing_time_ms_sum[1m])) / sum(rate(order_processing_time_ms_count[1m]))",
+          "expr": "sum(rate(order_processing_time_ms_milliseconds_sum[1m])) / sum(rate(order_processing_time_ms_milliseconds_count[1m]))",
           "legendFormat": "Média processamento"
         }
       ],
@@ -422,8 +422,11 @@
   ],
   "refresh": "5s",
   "schemaVersion": 39,
-  "tags": ["tcc", "microservices"],
-  "time": { "from": "now-15m", "to": "now" },
+  "tags": [ "tcc", "microservices" ],
+  "time": {
+    "from": "now-15m",
+    "to": "now"
+  },
   "timepicker": {},
   "timezone": "browser",
   "title": "TCC — Experimento Microserviços",

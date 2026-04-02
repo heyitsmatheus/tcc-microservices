@@ -1,3 +1,4 @@
+import { textSummary } from 'https://jslib.k6.io/k6-summary/0.0.2/index.js';
 import http from 'k6/http';
 import { check, sleep } from 'k6';
 import { Trend, Rate, Counter } from 'k6/metrics';
@@ -53,13 +54,26 @@ export default function () {
     const res = http.post(`${BASE_URL}/api/orders`, PAYLOAD, { headers: HEADERS });
 
     latency.add(res.timings.duration);
+    // Kafka retorna 202 Accepted
     errorRate.add(res.status !== 202);
     orderCount.add(1);
 
     check(res, {
         'status 202': (r) => r.status === 202,
-        'status accepted': (r) => JSON.parse(r.body).status === 'ACCEPTED',
+        'status accepted': (r) => {
+            try {
+                return JSON.parse(r.body).status === 'ACCEPTED';
+            } catch (e) {
+                return false;
+            }
+        },
     });
 
     sleep(0.1);
+}
+
+export function handleSummary(data) {
+    return {
+        stdout: textSummary(data, { indent: ' ', enableColors: true }),
+    };
 }

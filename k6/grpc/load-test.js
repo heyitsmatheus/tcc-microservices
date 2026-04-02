@@ -1,3 +1,4 @@
+import { textSummary } from 'https://jslib.k6.io/k6-summary/0.0.2/index.js';
 import http from 'k6/http';
 import { check, sleep } from 'k6';
 import { Trend, Rate, Counter } from 'k6/metrics';
@@ -35,8 +36,6 @@ export const options = {
     },
 };
 
-// O Gateway gRPC expõe HTTP — k6 chama o mesmo endpoint
-// A comunicação gRPC acontece internamente entre Gateway e Processor
 const BASE_URL = __ENV.BASE_URL || 'http://localhost:5010';
 
 const PAYLOAD = JSON.stringify({
@@ -59,8 +58,20 @@ export default function () {
 
     check(res, {
         'status 200': (r) => r.status === 200,
-        'has orderId': (r) => JSON.parse(r.body).orderId !== undefined,
+        'has orderId': (r) => {
+            try {
+                return JSON.parse(r.body).orderId !== undefined;
+            } catch (e) {
+                return false;
+            }
+        },
     });
 
     sleep(0.1);
+}
+
+export function handleSummary(data) {
+    return {
+        stdout: textSummary(data, { indent: ' ', enableColors: true }),
+    };
 }

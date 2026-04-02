@@ -1,7 +1,9 @@
+import { textSummary } from 'https://jslib.k6.io/k6-summary/0.0.2/index.js';
 import http from 'k6/http';
 import { check, sleep } from 'k6';
 import { Trend, Rate, Counter } from 'k6/metrics';
 
+// Métricas customizadas
 const latency = new Trend('order_latency', true);
 const errorRate = new Rate('order_error_rate');
 const orderCount = new Counter('order_count');
@@ -30,8 +32,8 @@ export const options = {
         },
     },
     thresholds: {
-        order_error_rate: ['rate<0.05'],   // menos de 5% de erro
-        order_latency: ['p(95)<2000'],  // P95 abaixo de 2 segundos
+        order_error_rate: ['rate<0.05'],
+        order_latency: ['p(95)<2000'],
     },
 };
 
@@ -57,8 +59,21 @@ export default function () {
 
     check(res, {
         'status 200': (r) => r.status === 200,
-        'has orderId': (r) => JSON.parse(r.body).orderId !== undefined,
+        'has orderId': (r) => {
+            try {
+                return JSON.parse(r.body).orderId !== undefined;
+            } catch (e) {
+                return false;
+            }
+        },
     });
 
     sleep(0.1);
+}
+
+// Sumário exportado ao final de cada execução
+export function handleSummary(data) {
+    return {
+        stdout: textSummary(data, { indent: ' ', enableColors: true }),
+    };
 }
