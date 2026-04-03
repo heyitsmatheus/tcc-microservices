@@ -14,14 +14,19 @@ var processingTime = meter.CreateHistogram<double>(
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Habilita HTTP/1.1 e HTTP/2 na mesma porta
+// Habilita HTTP/1.1 na porta 8080 e HTTP/2 na porta 5011
 // HTTP/2 → necessário para gRPC
 // HTTP/1.1 → necessário para o Prometheus fazer scraping do /metrics
 builder.WebHost.ConfigureKestrel(options =>
 {
+    options.ListenAnyIP(5011, listenOptions =>
+    {
+        listenOptions.Protocols = HttpProtocols.Http2;
+    });
+
     options.ListenAnyIP(8080, listenOptions =>
     {
-        listenOptions.Protocols = HttpProtocols.Http1AndHttp2;
+        listenOptions.Protocols = HttpProtocols.Http1;
     });
 });
 

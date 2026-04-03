@@ -170,13 +170,13 @@ k6 run --env BASE_URL=http://localhost:5000 --env EXPECTED_STATUS=200 k6/smoke-t
 
 ```bash
 # Repetição 1
-k6 run k6/rest/load-test.js --out json=results/rest/run-1.json
+k6 run k6/rest/load-test.js --out csv=results/rest/run-1.csv
 
 # Repetição 2
-k6 run k6/rest/load-test.js --out json=results/rest/run-2.json
+k6 run k6/rest/load-test.js --out csv=results/rest/run-2.csv
 
 # Repetição 3
-k6 run k6/rest/load-test.js --out json=results/rest/run-3.json
+k6 run k6/rest/load-test.js --out csv=results/rest/run-3.csv
 ```
 
 ### 5. Executar experimento — cenário de falha
@@ -185,7 +185,7 @@ Abrir **dois terminais** em paralelo:
 
 **Terminal 1 — k6:**
 ```bash
-k6 run k6/rest/failure-test.js --out json=results/rest/failure-run-1.json
+k6 run k6/rest/failure-test.js --out csv=results/rest/failure-run-1.csv
 ```
 
 **Terminal 2 — script de falha (executar imediatamente após o k6 iniciar):**
@@ -255,20 +255,20 @@ k6 run --env BASE_URL=http://localhost:5010 --env EXPECTED_STATUS=200 k6/smoke-t
 
 ```bash
 # Repetição 1
-k6 run k6/grpc/load-test.js --out json=results/grpc/run-1.json
+k6 run k6/grpc/load-test.js --out csv=results/grpc/run-1.csv
 
 # Repetição 2
-k6 run k6/grpc/load-test.js --out json=results/grpc/run-2.json
+k6 run k6/grpc/load-test.js --out csv=results/grpc/run-2.csv
 
 # Repetição 3
-k6 run k6/grpc/load-test.js --out json=results/grpc/run-3.json
+k6 run k6/grpc/load-test.js --out csv=results/grpc/run-3.csv
 ```
 
 ### 5. Executar experimento — cenário de falha
 
 **Terminal 1 — k6:**
 ```bash
-k6 run k6/grpc/failure-test.js --out json=results/grpc/failure-run-1.json
+k6 run k6/grpc/failure-test.js --out csv=results/grpc/failure-run-1.csv
 ```
 
 **Terminal 2 — script de falha:**
@@ -340,20 +340,20 @@ k6 run --env BASE_URL=http://localhost:5020 --env EXPECTED_STATUS=202 k6/smoke-t
 
 ```bash
 # Repetição 1
-k6 run k6/kafka/load-test.js --out json=results/kafka/run-1.json
+k6 run k6/kafka/load-test.js --out csv=results/kafka/run-1.csv
 
 # Repetição 2
-k6 run k6/kafka/load-test.js --out json=results/kafka/run-2.json
+k6 run k6/kafka/load-test.js --out csv=results/kafka/run-2.csv
 
 # Repetição 3
-k6 run k6/kafka/load-test.js --out json=results/kafka/run-3.json
+k6 run k6/kafka/load-test.js --out csv=results/kafka/run-3.csv
 ```
 
 ### 5. Executar experimento — cenário de falha
 
 **Terminal 1 — k6:**
 ```bash
-k6 run k6/kafka/failure-test.js --out json=results/kafka/failure-run-1.json
+k6 run k6/kafka/failure-test.js --out csv=results/kafka/failure-run-1.csv
 ```
 
 **Terminal 2 — script de falha:**
@@ -406,14 +406,14 @@ Para cada cenário (REST, gRPC, Kafka):
   1. docker compose up --build
   2. Verificar targets → http://localhost:9090/targets
   3. k6 smoke-test
-  4. k6 run → run-1.json  (repetição 1)
-  5. k6 run → run-2.json  (repetição 2)
-  6. k6 run → run-3.json  (repetição 3)
+  4. k6 run → run-1.csv  (repetição 1)
+  5. k6 run → run-2.csv  (repetição 2)
+  6. k6 run → run-3.csv  (repetição 3)
   7. Anotar métricas do Prometheus na planilha
   8. Exportar snapshot do Grafana
 
   Cenário de Falha:
-  9.  Terminal 1 → k6 failure-test → failure-run-1.json
+  9.  Terminal 1 → k6 failure-test → failure-run-1.csv
       Terminal 2 → failure-scenario.ps1
   10. Anotar métricas do Prometheus na planilha
   11. Exportar snapshot do Grafana
@@ -529,18 +529,18 @@ O dashboard **TCC — Experimento Microserviços** é provisionado automaticamen
 ```
 results/
 ├── rest/
-│   ├── run-1.json
-│   ├── run-2.json
-│   ├── run-3.json
-│   └── failure-run-1.json
+│   ├── run-1.csv
+│   ├── run-2.csv
+│   ├── run-3.csv
+│   └── failure-run-1.csv
 ├── grpc/
-│   ├── run-1.json
-│   ├── run-2.json
-│   ├── run-3.json
-│   └── failure-run-1.json
+│   ├── run-1.csv
+│   ├── run-2.csv
+│   ├── run-3.csv
+│   └── failure-run-1.csv
 └── kafka/
-    ├── run-1.json
-    ├── run-2.json
-    ├── run-3.json
-    └── failure-run-1.json
+    ├── run-1.csv
+    ├── run-2.csv
+    ├── run-3.csv
+    └── failure-run-1.csv
 ```

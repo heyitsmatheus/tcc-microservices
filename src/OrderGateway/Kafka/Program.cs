@@ -13,18 +13,29 @@ builder.Services.AddOpenTelemetry()
             .AddPrometheusExporter();
     });
 
+// 🔥 Registrar Producer como Singleton
+builder.Services.AddSingleton<IProducer<string, string>>(sp =>
+{
+    var configuration = sp.GetRequiredService<IConfiguration>();
+
+    var config = new ProducerConfig
+    {
+        BootstrapServers = configuration["KAFKA_BOOTSTRAP_SERVERS"] ?? "localhost:9092"
+    };
+
+    return new ProducerBuilder<string, string>(config).Build();
+});
+
 var app = builder.Build();
 
 app.MapPrometheusScrapingEndpoint();
 
-app.MapPost("/api/orders", async (OrderRequest request, IConfiguration configuration) =>
+app.MapPost("/api/orders", async (
+    OrderRequest request,
+    IConfiguration configuration,
+    IProducer<string, string> producer) =>
 {
-    var bootstrapServers = configuration["KAFKA_BOOTSTRAP_SERVERS"] ?? "localhost:9092";
     var topic = configuration["KAFKA_TOPIC"] ?? "orders";
-
-    var config = new ProducerConfig { BootstrapServers = bootstrapServers };
-
-    using var producer = new ProducerBuilder<string, string>(config).Build();
 
     var message = new Message<string, string>
     {
